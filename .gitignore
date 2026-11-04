@@ -1,0 +1,10 @@
+**/xmrig
+**/*.tar.gz
+**/config.json
+**/.gateway
+**/.full-dataset-ready
+**/*.pem
+**/id_ed25519*
+**/.env
+__pycache__/
+*.pyc
