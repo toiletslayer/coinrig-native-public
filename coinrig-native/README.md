@@ -1,4 +1,4 @@
-# coinrig-native 1.1.0 beta.2
+# coinrig-native 1.1.0 beta.3
 
 HiveOS custom-miner wrapper for Scratcher / blackshirt-crypto's public,
 COIN-specific XMRig fork, v6.26.0-coin:
@@ -19,6 +19,11 @@ miner and it is not validated on every HiveOS worker.
 
 Configure the actual mining-only gateway locally on your own worker; no wallet
 addresses or private LAN settings are built into the distributed archive.
+
+All three HiveOS callbacks resolve packaged files from their own installed
+location. This remains correct when HiveOS exports the parent custom-miner
+directory as `MINER_DIR` and when callbacks are invoked from an unrelated
+working directory.
 
 ## Runtime
 
