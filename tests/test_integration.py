@@ -93,6 +93,13 @@ class IntegrationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual((self.miner / ".gateway").read_text().strip(), f"{host}:38881")
 
+    def test_hiveos_rx2_alias_is_normalized(self):
+        result = self.configure(CUSTOM_ALGO="rx2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = json.loads((self.miner / "config.json").read_text())
+        self.assertEqual(config["pools"][0]["algo"], "rx/2")
+        self.assertEqual(config["cpu"]["rx/2"], list(range(32)))
+
     def test_invalid_gateway_fail_closed(self):
         for url in ("", "127.0.0.1:38881", "8.8.8.8:38881",
                     "localhost:38881", "192.168.0.1:0", "10.0.0.2:99999",

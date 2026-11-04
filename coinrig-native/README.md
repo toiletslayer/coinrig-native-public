@@ -1,4 +1,4 @@
-# coinrig-native 1.1.0 beta.1
+# coinrig-native 1.1.0 beta.2
 
 HiveOS custom-miner wrapper for Scratcher / blackshirt-crypto's public,
 COIN-specific XMRig fork, v6.26.0-coin:
@@ -11,7 +11,7 @@ miner and it is not validated on every HiveOS worker.
 ## Flight-sheet values
 
 - Miner name: coinrig-native
-- Hash algorithm: rx/2
+- Hash algorithm: rx2 (HiveOS dropdown), or rx/2 (XMRig name); internally normalized to rx/2
 - Wallet template: %WAL% (95-character primary COIN address, C...)
 - Pool URL: RFC1918 private IPv4:port for your approved mining gateway
 - Extra config: empty or threads=32

@@ -18,8 +18,8 @@ if ! python3 "$MINER_DIR/submission-gate.py" validate-endpoint --endpoint "$ENDP
 fi
 
 case "$ALGO" in
-  ""|rx/2) ;;
-  *) die "CUSTOM_ALGO must be rx/2 or empty" || return $? ;;
+  ""|rx2|rx/2) ;;
+  *) die "CUSTOM_ALGO must be rx2, rx/2, or empty" || return $? ;;
 esac
 
 case "$EXTRA" in

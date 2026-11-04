@@ -9,10 +9,14 @@ It does **not** claim authorship of his hashing implementation.
 
 ## Public beta release
 
-Planned tag: `coinrig-native-v1.1.0-beta.1`.
-The installable archive is named `coinrig-native-1.1.0_beta1.tar.gz`
+Current release tag: `coinrig-native-v1.1.0-beta.2`.
+The installable archive is named `coinrig-native-1.1.0_beta2.tar.gz`
 and contains the unmodified verified upstream XMRig 6.26.0-coin binary.
-See GitHub **Releases** for the download and published SHA-256.
+[Release details](https://github.com/toiletslayer/coinrig-native-public/releases/tag/coinrig-native-v1.1.0-beta.2).
+
+Direct HiveOS Installation URL: https://github.com/toiletslayer/coinrig-native-public/releases/download/coinrig-native-v1.1.0-beta.2/coinrig-native-1.1.0_beta2.tar.gz
+
+The earlier beta.1 does not accept the HiveOS `rx2` dropdown value. Use beta.2.
 
 Source for the upstream miner (pinned to Scratcher's v6.26.0-coin tag) is
 offered alongside the binary archive as a separate release asset.
@@ -26,7 +30,7 @@ This repository contains the wrapper's corresponding source and GPLv3 license.
 - Miner: Custom
 - Miner name: `coinrig-native`
 - Installation URL: direct URL for the archive under the release page
-- Hash algorithm: `rx/2`
+- Hash algorithm in HiveOS: `rx2` (also accepts `rx/2`; internal miner remains `rx/2`)
 - Wallet and worker template: `%WAL%` (no worker suffix)
 - Pool URL: your trusted *mining-only* RFC1918 IPv4 gateway and port
 - Password: `x`
