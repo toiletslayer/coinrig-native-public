@@ -1,29 +1,35 @@
-# coinrig-native — HiveOS integration source
+# coinrig-native 1.1.0 beta.1
 
-This wrapper uses [Scratcher / blackshirt-crypto's COIN-specific XMRig
-fork](https://github.com/blackshirt-crypto/xmrig-coin). Scratcher is the
-author of the COIN-compatible mining engine; these scripts are an independent
-HiveOS launcher, stats integration, and local full-dataset submission gate.
+HiveOS custom-miner wrapper for Scratcher / blackshirt-crypto's public,
+COIN-specific XMRig fork, v6.26.0-coin:
+https://github.com/blackshirt-crypto/xmrig-coin
 
-Requirements: HiveOS x86-64, Bash, Python 3, the compatible upstream XMRig
-executable, a 95-character COIN payout address beginning with C, and a trusted
-mining-only RPC gateway on a private RFC1918 IPv4 LAN.
+This package is intended for a trusted LAN mining-only gateway and a 32-thread
+CPU (e.g. Ryzen 9 5950X). It is **not** an unrestricted general-purpose pool
+miner and it is not validated on every HiveOS worker.
 
-HiveOS fields:
-- Coin: COIN (custom)
-- Miner: Custom; name: coinrig-native
-- Algorithm: rx/2
-- Wallet template: %WAL% with no worker suffix
-- Pool URL: your trusted RFC1918 private IPv4 host:port
+## Flight-sheet values
+
+- Miner name: coinrig-native
+- Hash algorithm: rx/2
+- Wallet template: %WAL% (95-character primary COIN address, C...)
+- Pool URL: RFC1918 private IPv4:port for your approved mining gateway
 - Extra config: empty or threads=32
+- Password: x
 
-This is a 32-thread reference profile, not an automatic CPU optimizer. It pins
-RandomX to full-memory, disables MSR writes, serves metrics on loopback only,
-and blocks submitblock until a 2336 MB full dataset is ready.
+Configure the actual mining-only gateway locally on your own worker; no wallet
+addresses or private LAN settings are built into the distributed archive.
 
-Source-only preview: no public binary asset or installer is released.
-This generalized integration has not been tested on additional HiveOS rigs.
-The upstream binary may enforce a 1% developer donation despite the
---donate-level=0 argument.
+## Runtime
 
-License and origin: LICENSE and PROVENANCE.md.
+Full RandomX v2 dataset (2336 MB), 32 threads, MSR writes disabled.
+XMRig and a local gateway run on 127.0.0.1; submitblock is blocked until
+the full dataset is ready. Monitoring is available to HiveOS via h-stats.sh.
+
+All included binaries and source originate from the exact upstream version:
+v6.26.0-coin, released by blackshirt-crypto.
+The static miner binary may enforce 1% developer donation despite an explicit
+donation-level 0 request.
+
+See PROVENANCE.md, LICENSE, and the pinned upstream source archive included
+with the public release. Do not use this COIN-specific miner for Monero.

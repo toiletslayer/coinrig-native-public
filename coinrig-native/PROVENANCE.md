@@ -14,3 +14,6 @@ binary was copied. Prior isolated testing established that the published binary
 uses the COIN-specific RandomX v2 behavior in full-memory mode; light mode is not
 valid for this use. The release archive checksum authenticates consistency with
 the publisher's posted checksum, not a signed reproducible-build attestation.
+
+- Upstream release tag commit: ca01d6df121c5c3692cd16cb64d95cf861398703
+- The public beta release offers the pinned XMRig source archive alongside the binary.

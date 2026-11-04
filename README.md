@@ -1,22 +1,57 @@
-# coinrig-native — COIN HiveOS integration
+# coinrig-native — COIN HiveOS custom miner
 
-A public **source-only preview** of the HiveOS wrapper for the COIN-specific
-RandomX v2 miner by [Scratcher / blackshirt-crypto](https://github.com/blackshirt-crypto/xmrig-coin).
-Scratcher built the native COIN hashing implementation. This project provides
-HiveOS integration scripts and a local submission safety gate.
+**Public beta** of a HiveOS integration for the COIN-specific RandomX v2 miner
+by [Scratcher / blackshirt-crypto](https://github.com/blackshirt-crypto/xmrig-coin).
 
-The public source includes:
-- HiveOS h-config, h-run, h-stats, h-manifest integration callbacks.
-- Python submission gate that blocks submitblock before full dataset readiness.
-- Endpoint validation allowing only RFC1918 private IPv4 host and port.
-- Provenance, upstream GPLv3 license, and endpoint contract tests.
+Scratcher created the COIN-compatible XMRig patch. This project contributes a
+HiveOS wrapper, hashrate statistics and a full-memory submission gate.
+It does **not** claim authorship of his hashing implementation.
 
-This is NOT a ready-to-install public HiveOS package. There is no published
-binary or release asset. It is currently a 32-thread reference configuration.
-Other hardware and gateway configurations require independent testing.
-No actual wallet addresses, credentials, or private mining history are included.
+## Public beta release
 
-Original COIN-compatible XMRig: https://github.com/blackshirt-crypto/xmrig-coin
-The upstream project is GPLv3. See coinrig-native/LICENSE and
-coinrig-native/PROVENANCE.md. Distributing a compiled binary requires
-corresponding-source compliance.
+Planned tag: `coinrig-native-v1.1.0-beta.1`.
+The installable archive is named `coinrig-native-1.1.0_beta1.tar.gz`
+and contains the unmodified verified upstream XMRig 6.26.0-coin binary.
+See GitHub **Releases** for the download and published SHA-256.
+
+Source for the upstream miner (pinned to Scratcher's v6.26.0-coin tag) is
+offered alongside the binary archive as a separate release asset.
+This repository contains the wrapper's corresponding source and GPLv3 license.
+
+## HiveOS flight sheet (32-thread reference)
+
+- Coin: your existing COIN custom coin
+- Wallet: your own COIN payout address (95-character primary address, C...)
+- Pool: Configure in miner
+- Miner: Custom
+- Miner name: `coinrig-native`
+- Installation URL: direct URL for the archive under the release page
+- Hash algorithm: `rx/2`
+- Wallet and worker template: `%WAL%` (no worker suffix)
+- Pool URL: your trusted *mining-only* RFC1918 IPv4 gateway and port
+- Password: `x`
+- Extra config: empty or exactly `threads=32`
+
+Do not point it directly to a publicly exposed unrestricted node RPC.
+Public IP addresses and hostnames are rejected by design. The miner's RPC
+statistics API and full-memory submission gate bind to loopback only.
+
+## Safety and limitations
+
+- Forced full-memory RandomX v2, no MSR writes, gate blocks submitblock until
+  a 2336 MB dataset is ready.
+- This is a **32-thread reference implementation**, not automatic CPU tuning.
+- The original XMRig release may enforce a 1% development donation despite
+  the `--donate-level=0` argument.
+- The wrapper has passed offline tests but hasn't been deployed on a range
+  of independent rigs. Treat this as beta software.
+
+Run offline validation with `python -m unittest discover -s tests -v`.
+See [security guidance](SECURITY.md), [integration detail](coinrig-native/README.md)
+and [upstream attribution](coinrig-native/PROVENANCE.md).
+
+## Licensing
+
+GNU GPLv3 — see [LICENSE](coinrig-native/LICENSE).
+Before redistributing a build, include or provide complete corresponding source
+for the XMRig binary and retain the upstream license and attribution.
