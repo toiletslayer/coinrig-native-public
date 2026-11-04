@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 # HiveOS sources this callback; do not change the parent shell's option state.
-MINER_DIR="${MINER_DIR:-/hive/miners/custom/coinrig-native}"
 ENDPOINT="${CUSTOM_URL:-}"
 WALLET="${CUSTOM_TEMPLATE:-}"
 ALGO="${CUSTOM_ALGO:-}"
@@ -12,8 +11,14 @@ die() {
   return 1 2>/dev/null || exit 1
 }
 
+package_dir_candidate="${COINRIG_PACKAGE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}"
+PACKAGE_DIR="$(CDPATH= cd -- "$package_dir_candidate" 2>/dev/null && pwd -P)" || {
+  die "cannot resolve installed package directory" || return $?
+}
+unset package_dir_candidate
+
 command -v python3 >/dev/null 2>&1 || { die "python3 is required"; return $?; }
-if ! python3 "$MINER_DIR/submission-gate.py" validate-endpoint --endpoint "$ENDPOINT" >/dev/null; then
+if ! python3 "$PACKAGE_DIR/submission-gate.py" validate-endpoint --endpoint "$ENDPOINT" >/dev/null; then
   die "CUSTOM_URL must be a trusted RFC1918 IPv4 host:port" || return $?
 fi
 
@@ -31,10 +36,10 @@ if [[ ! "$WALLET" =~ ^C[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwx
   die "CUSTOM_TEMPLATE must be a 95-character COIN primary address beginning with C" || return $?
 fi
 
-mkdir -p "$MINER_DIR" || { die "cannot create miner directory"; return $?; }
+mkdir -p "$PACKAGE_DIR" || { die "cannot create miner directory"; return $?; }
 umask 077
-config_tmp="$MINER_DIR/.config.json.$$"
-gateway_tmp="$MINER_DIR/.gateway.$$"
+config_tmp="$PACKAGE_DIR/.config.json.$$"
+gateway_tmp="$PACKAGE_DIR/.gateway.$$"
 
 if ! cat > "$config_tmp" <<EOF
 {
@@ -107,11 +112,11 @@ if ! chmod 600 "$config_tmp" "$gateway_tmp"; then
   rm -f "$config_tmp" "$gateway_tmp"
   die "cannot protect generated configuration" || return $?
 fi
-if ! mv -f "$gateway_tmp" "$MINER_DIR/.gateway"; then
+if ! mv -f "$gateway_tmp" "$PACKAGE_DIR/.gateway"; then
   rm -f "$config_tmp" "$gateway_tmp"
   die "cannot install validated gateway state" || return $?
 fi
-if ! mv -f "$config_tmp" "$MINER_DIR/config.json"; then
+if ! mv -f "$config_tmp" "$PACKAGE_DIR/config.json"; then
   rm -f "$config_tmp"
   die "cannot install generated miner configuration" || return $?
 fi

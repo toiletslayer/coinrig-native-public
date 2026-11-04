@@ -37,7 +37,8 @@ def bash_exe() -> str:
     return shutil.which("bash") or "bash"
 
 
-def run_bash(script: str, *, env: dict[str, str] | None = None, timeout=12):
+def run_bash(script: str, *, env: dict[str, str] | None = None, cwd: Path | None = None,
+             timeout=12):
     merged = os.environ.copy()
     if env:
         merged.update(env)
@@ -47,7 +48,7 @@ def run_bash(script: str, *, env: dict[str, str] | None = None, timeout=12):
         binary = posix_path(Path(sys.executable))
         command = f"python3() {{ {binary} \"$@\"; }}\nexport -f python3\n" + script
     return subprocess.run([bash_exe(), "-lc", command], capture_output=True, text=True,
-                          env=merged, timeout=timeout)
+                          cwd=cwd, env=merged, timeout=timeout)
 
 
 class IntegrationTests(unittest.TestCase):
@@ -55,13 +56,15 @@ class IntegrationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
-        self.miner = self.directory / "miner"
-        self.miner.mkdir()
+        self.miner = self.directory / "hive" / "miners" / "custom" / "coinrig-native"
+        self.miner.mkdir(parents=True)
+        self.unrelated_cwd = self.directory / "tmp" / "coin-native-test" / "xmrig-6.26.0-coin"
+        self.unrelated_cwd.mkdir(parents=True)
         for name in ("h-config.sh", "h-run.sh", "h-stats.sh", "h-manifest.conf",
                      "submission-gate.py"):
             shutil.copy2(PACKAGE / name, self.miner / name)
 
-    def configure(self, **overrides):
+    def configure(self, *, cwd: Path | None = None, **overrides):
         options = {
             "MINER_DIR": posix_path(self.miner),
             "CUSTOM_URL": ENDPOINT,
@@ -70,7 +73,8 @@ class IntegrationTests(unittest.TestCase):
             "CUSTOM_USER_CONFIG": "threads=32",
         }
         options.update(overrides)
-        return run_bash(f"source {posix_path(self.miner / 'h-config.sh')}", env=options)
+        return run_bash(f"source {posix_path(self.miner / 'h-config.sh')}", env=options,
+                        cwd=cwd)
 
     def test_config_valid(self):
         result = self.configure()
@@ -85,6 +89,68 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse(obj["randomx"]["rdmsr"])
         self.assertEqual(obj["pools"][0]["daemon"], True)
         self.assertTrue((self.miner / "config.json").stat().st_size > 100)
+
+    def test_config_uses_installed_package_with_hiveos_parent_miner_dir(self):
+        result = self.configure(
+            cwd=self.unrelated_cwd,
+            MINER_DIR=posix_path(self.miner.parent),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.miner / "config.json").is_file())
+        self.assertEqual((self.miner / ".gateway").read_text().strip(), ENDPOINT)
+        self.assertFalse((self.miner.parent / "config.json").exists())
+        self.assertFalse((self.miner.parent / ".gateway").exists())
+
+    def test_config_allows_explicit_package_dir_override_for_tests(self):
+        callbacks = self.directory / "callbacks"
+        callbacks.mkdir()
+        shutil.copy2(PACKAGE / "h-config.sh", callbacks / "h-config.sh")
+        options = {
+            "MINER_DIR": posix_path(self.miner.parent),
+            "COINRIG_PACKAGE_DIR": posix_path(self.miner),
+            "CUSTOM_URL": ENDPOINT,
+            "CUSTOM_TEMPLATE": WALLET,
+            "CUSTOM_ALGO": "rx2",
+            "CUSTOM_USER_CONFIG": "threads=32",
+        }
+        result = run_bash(
+            f"source {posix_path(callbacks / 'h-config.sh')}",
+            env=options,
+            cwd=self.unrelated_cwd,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.miner / "config.json").is_file())
+        self.assertEqual((self.miner / ".gateway").read_text().strip(), ENDPOINT)
+
+    def test_stats_uses_installed_helper_with_hiveos_parent_miner_dir(self):
+        trace = self.directory / "stats-helper-argv.txt"
+        fake_python = self.directory / "fake-python"
+        fake_python.write_text(
+            "#!/usr/bin/env bash\n"
+            "printf '%s\\n' \"$1\" > \"$TRACE_FILE\"\n"
+            "printf '12.5\\t{\"hashrate\":12500}\\n'\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        if os.name != "nt":
+            fake_python.chmod(0o755)
+        env = {
+            "MINER_DIR": posix_path(self.miner.parent),
+            "PYTHON_BIN": posix_path(fake_python),
+            "TRACE_FILE": posix_path(trace),
+        }
+        script = (
+            f"source {posix_path(self.miner / 'h-stats.sh')}\n"
+            "printf 'KHS=%s\\nSTATS=%s\\n' \"$khs\" \"$stats\""
+        )
+        result = run_bash(script, env=env, cwd=self.unrelated_cwd)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("KHS=12.5", result.stdout)
+        self.assertIn('STATS={"hashrate":12500}', result.stdout)
+        self.assertEqual(
+            trace.read_text(encoding="utf-8").strip(),
+            posix_path(self.miner / "submission-gate.py"),
+        )
 
     def test_accepts_all_three_rfc1918_ranges(self):
         for host in ("10.1.2.3", "172.19.2.5", "192.168.1.222"):

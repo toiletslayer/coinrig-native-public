@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MINER_DIR="${MINER_DIR:-/hive/miners/custom/coinrig-native}"
+package_dir_candidate="${COINRIG_PACKAGE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}"
+PACKAGE_DIR="$(CDPATH= cd -- "$package_dir_candidate" 2>/dev/null && pwd -P)" || {
+  printf 'coinrig-native: cannot resolve installed package directory\n' >&2
+  exit 1
+}
+unset package_dir_candidate
 MINER_LOG_DIR="${MINER_LOG_DIR:-/var/log/miner/coinrig-native}"
 LOG_FILE="$MINER_LOG_DIR/coinrig-native.log"
-READY_FILE="$MINER_DIR/.full-dataset-ready"
+READY_FILE="$PACKAGE_DIR/.full-dataset-ready"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 FULL_DATASET_TIMEOUT="${FULL_DATASET_TIMEOUT:-300}"
 GATE_PID=""
@@ -56,18 +61,18 @@ rm -f "$READY_FILE"
   fail_run "FULL_DATASET_TIMEOUT must be 1-600 seconds"
 
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail_run "python3 is required"
-test -x "$MINER_DIR/xmrig" || fail_run "xmrig is missing or not executable"
-test -f "$MINER_DIR/config.json" || fail_run "config.json is missing; HiveOS must run h-config.sh first"
-test -f "$MINER_DIR/.gateway" || fail_run "validated gateway state is missing"
+test -x "$PACKAGE_DIR/xmrig" || fail_run "xmrig is missing or not executable"
+test -f "$PACKAGE_DIR/config.json" || fail_run "config.json is missing; HiveOS must run h-config.sh first"
+test -f "$PACKAGE_DIR/.gateway" || fail_run "validated gateway state is missing"
 
-gateway="$(tr -d '\r\n' < "$MINER_DIR/.gateway")"
-gateway_pair="$("$PYTHON_BIN" "$MINER_DIR/submission-gate.py" validate-endpoint --endpoint "$gateway")" ||
+gateway="$(tr -d '\r\n' < "$PACKAGE_DIR/.gateway")"
+gateway_pair="$("$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-endpoint --endpoint "$gateway")" ||
   fail_run "gateway must be a trusted RFC1918 IPv4 host:port"
 read -r gateway_host gateway_port <<< "$gateway_pair"
-"$PYTHON_BIN" "$MINER_DIR/submission-gate.py" validate-config --config "$MINER_DIR/config.json" ||
+"$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-config --config "$PACKAGE_DIR/config.json" ||
   fail_run "locked startup configuration rejected"
 
-"$PYTHON_BIN" "$MINER_DIR/submission-gate.py" serve \
+"$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" serve \
   --listen-host 127.0.0.1 \
   --listen-port 18882 \
   --upstream-host "$gateway_host" \
@@ -80,8 +85,8 @@ kill -0 "$GATE_PID" 2>/dev/null || fail_run "submission gate failed to start"
 
 START_LINE=$(( $(wc -l < "$LOG_FILE") + 1 ))
 log_event "starting XMRig; submitblock remains blocked pending full-dataset proof"
-"$MINER_DIR/xmrig" \
-  --config "$MINER_DIR/config.json" \
+"$PACKAGE_DIR/xmrig" \
+  --config "$PACKAGE_DIR/config.json" \
   --algo=rx/2 \
   --daemon \
   --threads=32 \
