@@ -237,6 +237,12 @@ def validate_config(args: argparse.Namespace) -> int:
     try:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
         wallet = config["pools"][0]["user"]
+        thread_profile = config["cpu"]["rx/2"]
+        if not isinstance(thread_profile, list) or not 1 <= len(thread_profile) <= 256:
+            raise ValueError("thread profile length must be 1-256")
+        if any(type(index) is not int for index in thread_profile):
+            raise ValueError("thread profile entries must be integers")
+        thread_count = len(thread_profile)
         checks = (
             config["http"] == {
                 "enabled": True, "host": "127.0.0.1", "port": 18082,
@@ -246,7 +252,7 @@ def validate_config(args: argparse.Namespace) -> int:
             config["randomx"]["wrmsr"] is False,
             config["randomx"]["rdmsr"] is False,
             config["log-file"] == args.expected_log_file,
-            config["cpu"]["rx/2"] == list(range(32)),
+            thread_profile == list(range(thread_count)),
             config["donate-level"] == 0,
             len(config["pools"]) == 1,
             config["pools"][0]["algo"] == "rx/2",
@@ -260,6 +266,7 @@ def validate_config(args: argparse.Namespace) -> int:
     except (OSError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
         sys.stderr.write(f"coinrig-native: config validation failed: {exc}\n")
         return 1
+    print(thread_count)
     return 0
 
 

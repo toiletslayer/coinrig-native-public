@@ -69,6 +69,7 @@ class LauncherTests(unittest.TestCase):
         path = self.miner / "xmrig"
         path.write_text(
             "#!/usr/bin/env bash\n"
+            "if [[ -n \"${ARGS_FILE:-}\" ]]; then printf '%s\\n' \"$@\" > \"$ARGS_FILE\"; fi\n"
             "log_file=''\n"
             "for arg in \"$@\"; do\n"
             "  case \"$arg\" in --log-file=*) log_file=\"${arg#*=}\" ;; esac\n"
@@ -102,6 +103,25 @@ sleep 2
         self.assertEqual(result.returncode, 0, result.stderr + "\n" + self.log())
         self.assertIn("submitblock gate opened", self.log())
         self.assertFalse((self.miner / ".full-dataset-ready").exists())
+
+    def test_validated_thread_count_reaches_xmrig_cli(self):
+        for threads in (24, 32):
+            with self.subTest(threads=threads):
+                args_file = self.root / f"xmrig-args-{threads}.txt"
+                self.env["CUSTOM_USER_CONFIG"] = f"threads={threads}"
+                self.env["ARGS_FILE"] = posix_path(args_file)
+                self.init_config()
+                self.fake_miner("""echo 'randomx allocated 2336 MB (2080+256) huge pages 100% 1168/1168 +JIT'
+echo 'randomx dataset ready'
+sleep 1
+""")
+                result = self.run_launcher()
+                self.assertEqual(result.returncode, 0, result.stderr + "\n" + self.log())
+                args = args_file.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(
+                    [arg for arg in args if arg.startswith("--threads=")],
+                    [f"--threads={threads}"],
+                )
 
     def test_hiveos_parent_miner_dir_runs_installed_package_from_unrelated_cwd(self):
         self.env["MINER_DIR"] = posix_path(self.miner.parent)

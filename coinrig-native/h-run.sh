@@ -67,10 +67,12 @@ gateway="$(tr -d '\r\n' < "$PACKAGE_DIR/.gateway")"
 gateway_pair="$("$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-endpoint --endpoint "$gateway")" ||
   fail_run "gateway must be a trusted RFC1918 IPv4 host:port"
 read -r gateway_host gateway_port <<< "$gateway_pair"
-"$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-config \
+THREADS="$("$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-config \
   --config "$PACKAGE_DIR/config.json" \
-  --expected-log-file "$XMRIG_LOG_FILE" ||
+  --expected-log-file "$XMRIG_LOG_FILE")" ||
   fail_run "locked startup configuration rejected"
+[[ "$THREADS" =~ ^[1-9][0-9]{0,2}$ ]] && (( THREADS <= 256 )) ||
+  fail_run "validator returned an invalid thread count"
 
 "$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" serve \
   --listen-host 127.0.0.1 \
@@ -90,7 +92,7 @@ umask 077
   --log-file="$XMRIG_LOG_FILE" \
   --algo=rx/2 \
   --daemon \
-  --threads=32 \
+  --threads="$THREADS" \
   --randomx-mode=fast \
   --randomx-wrmsr=-1 \
   --donate-level=0 \

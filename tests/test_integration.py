@@ -275,19 +275,48 @@ class IntegrationTests(unittest.TestCase):
                 self.assertFalse((self.miner / ".gateway").exists())
                 self.assertFalse(injection_marker.exists())
 
-    def test_validate_generated_config(self):
-        result = self.configure()
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def validate_config(self):
         cmd = [sys.executable, str(self.miner / "submission-gate.py"),
                "validate-config", "--config", str(self.miner / "config.json"),
                "--expected-log-file", posix_path(self.miner / "xmrig.log")]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+
+    def test_validate_generated_config_returns_thread_count(self):
+        for threads in (24, 32):
+            with self.subTest(threads=threads):
+                configured = self.configure(CUSTOM_USER_CONFIG=f"threads={threads}")
+                self.assertEqual(configured.returncode, 0, configured.stderr)
+                result = self.validate_config()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{threads}\n")
+
         obj = json.loads((self.miner / "config.json").read_text())
         obj["log-file"] = None
         (self.miner / "config.json").write_text(json.dumps(obj))
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        result = self.validate_config()
         self.assertNotEqual(result.returncode, 0)
+
+    def test_validate_config_rejects_nonsequential_or_unsafe_thread_profiles(self):
+        configured = self.configure(CUSTOM_USER_CONFIG="threads=32")
+        self.assertEqual(configured.returncode, 0, configured.stderr)
+        original = json.loads((self.miner / "config.json").read_text())
+        invalid_profiles = (
+            [],
+            [1],
+            [0, 2],
+            [False],
+            [0, True],
+            list(range(24)) + [23],
+            list(range(257)),
+        )
+        for profile in invalid_profiles:
+            with self.subTest(profile_description=(len(profile), profile[:3])):
+                changed = json.loads(json.dumps(original))
+                changed["cpu"]["rx/2"] = profile
+                (self.miner / "config.json").write_text(json.dumps(changed))
+                result = self.validate_config()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
 
     def test_gate_rejects_empty_readiness_marker(self):
         ready_file = self.directory / ".full-dataset-ready"
