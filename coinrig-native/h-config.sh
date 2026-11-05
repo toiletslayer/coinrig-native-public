@@ -27,10 +27,24 @@ case "$ALGO" in
   *) die "CUSTOM_ALGO must be rx2, rx/2, or empty" || return $? ;;
 esac
 
-case "$EXTRA" in
-  ""|threads=32) ;;
-  *) die "CUSTOM_USER_CONFIG must be threads=32 or empty" || return $? ;;
-esac
+THREADS=32
+if [[ -n "$EXTRA" ]]; then
+  if [[ "$EXTRA" =~ ^threads=([1-9][0-9]{0,2})$ ]]; then
+    THREADS="${BASH_REMATCH[1]}"
+    (( THREADS <= 256 )) || {
+      die "CUSTOM_USER_CONFIG threads must be in the range 1-256" || return $?
+    }
+  else
+    die "CUSTOM_USER_CONFIG must be exactly threads=N (N is 1-256) or empty" || return $?
+  fi
+fi
+
+THREAD_PROFILE=""
+for (( thread_index=0; thread_index<THREADS; thread_index++ )); do
+  [[ -z "$THREAD_PROFILE" ]] || THREAD_PROFILE+=", "
+  THREAD_PROFILE+="$thread_index"
+done
+unset thread_index
 
 if [[ ! "$WALLET" =~ ^C[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{94}$ ]]; then
   die "CUSTOM_TEMPLATE must be a 95-character COIN primary address beginning with C" || return $?
@@ -71,7 +85,7 @@ if ! cat > "$config_tmp" <<EOF
     "memory-pool": false,
     "yield": true,
     "asm": true,
-    "rx/2": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    "rx/2": [$THREAD_PROFILE]
   },
   "opencl": false,
   "cuda": false,
@@ -121,4 +135,4 @@ if ! mv -f "$config_tmp" "$PACKAGE_DIR/config.json"; then
   die "cannot install generated miner configuration" || return $?
 fi
 
-printf 'coinrig-native: prepared locked rx/2 full-memory config for 32 threads\n'
+printf 'coinrig-native: prepared locked rx/2 full-memory config for %s threads\n' "$THREADS"

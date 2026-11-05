@@ -127,20 +127,29 @@ class IntegrationTests(unittest.TestCase):
         connection.close()
         return response.status, payload, request
 
-    def test_config_valid(self):
-        result = self.configure()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        obj = json.loads((self.miner / "config.json").read_text())
-        self.assertEqual((self.miner / ".gateway").read_text().strip(), ENDPOINT)
-        self.assertEqual(obj["pools"][0]["user"], WALLET)
-        self.assertEqual(obj["pools"][0]["url"], "127.0.0.1:18882")
-        self.assertEqual(obj["cpu"]["rx/2"], list(range(32)))
-        self.assertEqual(obj["randomx"]["mode"], "fast")
-        self.assertFalse(obj["randomx"]["wrmsr"])
-        self.assertFalse(obj["randomx"]["rdmsr"])
-        self.assertEqual(obj["log-file"], posix_path(self.miner / "xmrig.log"))
-        self.assertEqual(obj["pools"][0]["daemon"], True)
-        self.assertTrue((self.miner / "config.json").stat().st_size > 100)
+    def test_config_supports_blank_default_and_explicit_thread_counts(self):
+        cases = (
+            ("", 32),
+            ("threads=1", 1),
+            ("threads=24", 24),
+            ("threads=32", 32),
+            ("threads=256", 256),
+        )
+        for extra, expected_threads in cases:
+            with self.subTest(extra=extra):
+                result = self.configure(CUSTOM_USER_CONFIG=extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                obj = json.loads((self.miner / "config.json").read_text())
+                self.assertEqual((self.miner / ".gateway").read_text().strip(), ENDPOINT)
+                self.assertEqual(obj["pools"][0]["user"], WALLET)
+                self.assertEqual(obj["pools"][0]["url"], "127.0.0.1:18882")
+                self.assertEqual(obj["cpu"]["rx/2"], list(range(expected_threads)))
+                self.assertEqual(obj["randomx"]["mode"], "fast")
+                self.assertFalse(obj["randomx"]["wrmsr"])
+                self.assertFalse(obj["randomx"]["rdmsr"])
+                self.assertEqual(obj["log-file"], posix_path(self.miner / "xmrig.log"))
+                self.assertEqual(obj["pools"][0]["daemon"], True)
+                self.assertTrue((self.miner / "config.json").stat().st_size > 100)
 
     def test_config_uses_installed_package_with_hiveos_parent_miner_dir(self):
         result = self.configure(
@@ -232,13 +241,39 @@ class IntegrationTests(unittest.TestCase):
     def test_invalid_wallet_and_policy_fail_closed(self):
         for override in ({"CUSTOM_TEMPLATE": "D" + "1" * 94},
                          {"CUSTOM_TEMPLATE": "C" + "0" * 94},
-                         {"CUSTOM_ALGO": "rx/0"},
-                         {"CUSTOM_USER_CONFIG": "threads=8"}):
+                         {"CUSTOM_ALGO": "rx/0"}):
             with self.subTest(override=override):
                 (self.miner / "config.json").unlink(missing_ok=True)
                 result = self.configure(**override)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse((self.miner / "config.json").exists())
+
+    def test_invalid_thread_config_fails_closed_without_command_injection(self):
+        injection_marker = self.directory / "extra-config-was-executed"
+        invalid_values = (
+            "threads=0",
+            "threads=257",
+            "threads=01",
+            "threads=+24",
+            "threads=-24",
+            "threads=24 ",
+            " threads=24",
+            "threads=24\nthreads=32",
+            "threads=24,donate-level=5",
+            "threads=24 --randomx-mode=light",
+            f"threads=24;touch {posix_path(injection_marker)}",
+            "foo=24",
+            "threads=２４",
+        )
+        for extra in invalid_values:
+            with self.subTest(extra=extra):
+                for stale in (self.miner / "config.json", self.miner / ".gateway"):
+                    stale.unlink(missing_ok=True)
+                result = self.configure(CUSTOM_USER_CONFIG=extra)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.miner / "config.json").exists())
+                self.assertFalse((self.miner / ".gateway").exists())
+                self.assertFalse(injection_marker.exists())
 
     def test_validate_generated_config(self):
         result = self.configure()
