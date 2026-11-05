@@ -1,4 +1,4 @@
-# coinrig-native 1.1.0 beta.5 release candidate
+# coinrig-native 1.1.0 beta.5
 
 HiveOS custom-miner wrapper for Scratcher / blackshirt-crypto's public,
 COIN-specific XMRig fork, v6.26.0-coin:
