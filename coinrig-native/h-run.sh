@@ -9,12 +9,12 @@ PACKAGE_DIR="$(CDPATH= cd -- "$package_dir_candidate" 2>/dev/null && pwd -P)" ||
 unset package_dir_candidate
 MINER_LOG_DIR="${MINER_LOG_DIR:-/var/log/miner/coinrig-native}"
 LOG_FILE="$MINER_LOG_DIR/coinrig-native.log"
+XMRIG_LOG_FILE="$PACKAGE_DIR/xmrig.log"
 READY_FILE="$PACKAGE_DIR/.full-dataset-ready"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 FULL_DATASET_TIMEOUT="${FULL_DATASET_TIMEOUT:-300}"
 GATE_PID=""
 MINER_PID=""
-START_LINE=1
 
 log_event() {
   printf '%s coinrig-native: %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >> "$LOG_FILE"
@@ -44,18 +44,16 @@ fail_run() {
   exit 1
 }
 
-current_run_log_has() {
-  awk -v start="$START_LINE" -v needle="$1" '
-    NR >= start && index($0, needle) { found = 1; exit }
-    END { exit(found ? 0 : 1) }
-  ' "$LOG_FILE"
+xmrig_log_has() {
+  [[ -f "$XMRIG_LOG_FILE" ]] && grep -Fq -- "$1" "$XMRIG_LOG_FILE"
 }
 
 trap on_signal INT TERM HUP
 
 mkdir -p "$MINER_LOG_DIR"
 touch "$LOG_FILE"
-rm -f "$READY_FILE"
+rm -f "$READY_FILE" "$XMRIG_LOG_FILE" ||
+  fail_run "cannot clear stale readiness or XMRig log state"
 
 [[ "$FULL_DATASET_TIMEOUT" =~ ^[1-9][0-9]{0,2}$ ]] && (( FULL_DATASET_TIMEOUT <= 600 )) ||
   fail_run "FULL_DATASET_TIMEOUT must be 1-600 seconds"
@@ -69,7 +67,9 @@ gateway="$(tr -d '\r\n' < "$PACKAGE_DIR/.gateway")"
 gateway_pair="$("$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-endpoint --endpoint "$gateway")" ||
   fail_run "gateway must be a trusted RFC1918 IPv4 host:port"
 read -r gateway_host gateway_port <<< "$gateway_pair"
-"$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-config --config "$PACKAGE_DIR/config.json" ||
+"$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" validate-config \
+  --config "$PACKAGE_DIR/config.json" \
+  --expected-log-file "$XMRIG_LOG_FILE" ||
   fail_run "locked startup configuration rejected"
 
 "$PYTHON_BIN" "$PACKAGE_DIR/submission-gate.py" serve \
@@ -83,10 +83,11 @@ GATE_PID=$!
 sleep 0.2
 kill -0 "$GATE_PID" 2>/dev/null || fail_run "submission gate failed to start"
 
-START_LINE=$(( $(wc -l < "$LOG_FILE") + 1 ))
 log_event "starting XMRig; submitblock remains blocked pending full-dataset proof"
+umask 077
 "$PACKAGE_DIR/xmrig" \
   --config "$PACKAGE_DIR/config.json" \
+  --log-file="$XMRIG_LOG_FILE" \
   --algo=rx/2 \
   --daemon \
   --threads=32 \
@@ -100,13 +101,12 @@ started="$(date +%s)"
 while kill -0 "$MINER_PID" 2>/dev/null; do
   kill -0 "$GATE_PID" 2>/dev/null || fail_run "submission gate exited; stopping miner"
 
-  if current_run_log_has "switching to slow mode" ||
-     current_run_log_has "fast RandomX mode disabled"; then
+  if xmrig_log_has "switching to slow mode" ||
+     xmrig_log_has "fast RandomX mode disabled"; then
     fail_run "slow/light RandomX fallback detected; stopping before submitblock can pass"
   fi
 
-  if current_run_log_has "allocated 2336 MB" && current_run_log_has "dataset ready"; then
-    umask 077
+  if xmrig_log_has "allocated 2336 MB" && xmrig_log_has "dataset ready"; then
     printf 'full-dataset-ready\n' > "$READY_FILE"
     log_event "full 2336 MB RandomX dataset confirmed; submitblock gate opened"
     break
@@ -126,8 +126,8 @@ fi
 
 while kill -0 "$MINER_PID" 2>/dev/null; do
   kill -0 "$GATE_PID" 2>/dev/null || fail_run "submission gate exited; stopping miner"
-  if current_run_log_has "switching to slow mode" ||
-     current_run_log_has "fast RandomX mode disabled"; then
+  if xmrig_log_has "switching to slow mode" ||
+     xmrig_log_has "fast RandomX mode disabled"; then
     fail_run "slow/light RandomX fallback detected after startup; stopping miner"
   fi
   sleep 1

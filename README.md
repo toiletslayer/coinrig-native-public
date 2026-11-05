@@ -9,17 +9,19 @@ It does **not** claim authorship of his hashing implementation.
 
 ## Public beta release
 
-Current release tag: `coinrig-native-v1.1.0-beta.3`.
-The installable archive is named `coinrig-native-1.1.0_beta3.tar.gz`
+Current release tag: `coinrig-native-v1.1.0-beta.4`.
+The installable archive is named `coinrig-native-1.1.0_beta4.tar.gz`
 and contains the unmodified verified upstream XMRig 6.26.0-coin binary.
-[Release details](https://github.com/toiletslayer/coinrig-native-public/releases/tag/coinrig-native-v1.1.0-beta.3).
+[Release details](https://github.com/toiletslayer/coinrig-native-public/releases/tag/coinrig-native-v1.1.0-beta.4).
 
-Direct HiveOS Installation URL: https://github.com/toiletslayer/coinrig-native-public/releases/download/coinrig-native-v1.1.0-beta.3/coinrig-native-1.1.0_beta3.tar.gz
+Direct HiveOS Installation URL: https://github.com/toiletslayer/coinrig-native-public/releases/download/coinrig-native-v1.1.0-beta.4/coinrig-native-1.1.0_beta4.tar.gz
 
-beta.2 is superseded: real HiveOS exports `MINER_DIR=/hive/miners/custom`,
-while the package is installed one level below it. beta.3 makes every callback
-resolve its package files from the callback's own installed location. beta.1
-is also superseded because it does not accept the HiveOS `rx2` dropdown value.
+beta.3 is superseded: the exact XMRig build suppresses console output when stdout
+is redirected to a regular file, so the wrapper could not confirm dataset
+readiness and its submission gate stayed closed. beta.4 enables XMRig native
+file logging and confirms fresh full-dataset readiness before opening the gate.
+beta.2 was superseded due to HiveOS `MINER_DIR` handling; beta.1 did not accept
+HiveOS's `rx2` dropdown value.
 
 Source for the upstream miner (pinned to Scratcher's v6.26.0-coin tag) is
 offered alongside the binary archive as a separate release asset.
@@ -50,9 +52,10 @@ statistics API and full-memory submission gate bind to loopback only.
 - This is a **32-thread reference implementation**, not automatic CPU tuning.
 - The original XMRig release may enforce a 1% development donation despite
   the `--donate-level=0` argument.
-- The beta.2 path failure was reproduced from a real HiveOS worker. The beta.3
-  correction has passed offline source and extracted-package lifecycle tests,
-  but has not yet been started on that live worker. Treat this as beta software.
+- The beta.4 logging fix was experimentally validated using Scratcher's exact
+  checksum-pinned XMRig executable in network-disabled Linux tests, plus offline
+  fake-miner lifecycle tests. Live HiveOS beta.4 deployment and mainnet block
+  acceptance remain unverified. Treat this as prerelease software.
 
 Run offline validation with `python -m unittest discover -s tests -v`.
 See [security guidance](SECURITY.md), [integration detail](coinrig-native/README.md)

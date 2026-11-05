@@ -75,7 +75,7 @@ if ! cat > "$config_tmp" <<EOF
   },
   "opencl": false,
   "cuda": false,
-  "log-file": null,
+  "log-file": "$PACKAGE_DIR/xmrig.log",
   "donate-level": 0,
   "print-time": 30,
   "health-print-time": 60,

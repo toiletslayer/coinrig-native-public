@@ -1,4 +1,4 @@
-# coinrig-native 1.1.0 beta.3
+# coinrig-native 1.1.0 beta.4
 
 HiveOS custom-miner wrapper for Scratcher / blackshirt-crypto's public,
 COIN-specific XMRig fork, v6.26.0-coin:
@@ -30,6 +30,10 @@ working directory.
 Full RandomX v2 dataset (2336 MB), 32 threads, MSR writes disabled.
 XMRig and a local gateway run on 127.0.0.1; submitblock is blocked until
 the full dataset is ready. Monitoring is available to HiveOS via h-stats.sh.
+Launcher and gateway events remain in HiveOS's `coinrig-native.log`. XMRig's
+native output is written to `xmrig.log` in the installed package directory;
+the launcher clears that file before each start so readiness can only come
+from the current XMRig process.
 
 All included binaries and source originate from the exact upstream version:
 v6.26.0-coin, released by blackshirt-crypto.

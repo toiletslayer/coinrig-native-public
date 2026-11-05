@@ -24,7 +24,7 @@ except ImportError:
 
 
 PACKAGER_PATH = BASE / "scripts" / "package_release.py"
-EXPECTED_VERSION = "1.1.0_beta3"
+EXPECTED_VERSION = "1.1.0_beta4"
 EXPECTED_BINARY_SHA = "5b18de5443bf11c6565a433ab470c503c4192f6d17a33d0f8ad62c1852bcd462"
 EXPECTED_FILES = {
     "LICENSE",
@@ -53,7 +53,7 @@ def sha256(path: Path) -> str:
 
 
 class ReleasePackageTests(unittest.TestCase):
-    def test_extracted_beta3_archive_full_offline_lifecycle(self):
+    def test_extracted_beta4_archive_full_offline_lifecycle(self):
         prebuilt_value = os.environ.get("COINRIG_PACKAGE_ARCHIVE")
         upstream_value = os.environ.get("COINRIG_UPSTREAM_RELEASE")
         if not prebuilt_value and not upstream_value:
@@ -127,6 +127,12 @@ class ReleasePackageTests(unittest.TestCase):
             fake_miner = installed / "xmrig"
             fake_miner.write_text(
                 "#!/usr/bin/env bash\n"
+                "log_file=''\n"
+                "for arg in \"$@\"; do\n"
+                "  case \"$arg\" in --log-file=*) log_file=\"${arg#*=}\" ;; esac\n"
+                "done\n"
+                "[[ -n \"$log_file\" ]] || exit 97\n"
+                "exec >>\"$log_file\" 2>&1\n"
                 "echo 'randomx allocated 2336 MB (2080+256) huge pages 100% 1168/1168 +JIT'\n"
                 "echo 'randomx dataset ready'\n"
                 "sleep 2\n",

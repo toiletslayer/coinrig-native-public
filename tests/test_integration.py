@@ -5,13 +5,16 @@ No wallet, mining node, external network, or real XMRig process is used.
 from __future__ import annotations
 
 import importlib.util
+import http.client
 import json
 import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 BASE = Path(__file__).resolve().parents[1]
@@ -76,6 +79,54 @@ class IntegrationTests(unittest.TestCase):
         return run_bash(f"source {posix_path(self.miner / 'h-config.sh')}", env=options,
                         cwd=cwd)
 
+    def start_recording_gate(self, ready_file: Path):
+        recorded_bodies = []
+
+        class RecordingUpstream(BaseHTTPRequestHandler):
+            def do_POST(self):  # noqa: N802
+                length = int(self.headers["Content-Length"])
+                recorded_bodies.append(self.rfile.read(length))
+                body = b'{"jsonrpc":"2.0","id":7,"result":{"status":"OK"}}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format_string, *args):
+                pass
+
+        upstream = ThreadingHTTPServer(("127.0.0.1", 0), RecordingUpstream)
+        upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+        upstream_thread.start()
+        self.addCleanup(upstream.server_close)
+        self.addCleanup(upstream.shutdown)
+
+        gate_server = gate.GateServer(
+            ("127.0.0.1", 0),
+            gate.make_handler("127.0.0.1", upstream.server_address[1], ready_file),
+        )
+        gate_thread = threading.Thread(target=gate_server.serve_forever, daemon=True)
+        gate_thread.start()
+        self.addCleanup(gate_server.server_close)
+        self.addCleanup(gate_server.shutdown)
+        return gate_server, recorded_bodies
+
+    def gate_rpc(self, gate_server, method: str, *, path="/json_rpc"):
+        request = json.dumps(
+            {"jsonrpc": "2.0", "id": 7, "method": method, "params": ["block"]},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        connection = http.client.HTTPConnection(*gate_server.server_address, timeout=5)
+        connection.request(
+            "POST", path, body=request,
+            headers={"Content-Type": "application/json", "Content-Length": str(len(request))},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        connection.close()
+        return response.status, payload, request
+
     def test_config_valid(self):
         result = self.configure()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -87,6 +138,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(obj["randomx"]["mode"], "fast")
         self.assertFalse(obj["randomx"]["wrmsr"])
         self.assertFalse(obj["randomx"]["rdmsr"])
+        self.assertEqual(obj["log-file"], posix_path(self.miner / "xmrig.log"))
         self.assertEqual(obj["pools"][0]["daemon"], True)
         self.assertTrue((self.miner / "config.json").stat().st_size > 100)
 
@@ -192,14 +244,52 @@ class IntegrationTests(unittest.TestCase):
         result = self.configure()
         self.assertEqual(result.returncode, 0, result.stderr)
         cmd = [sys.executable, str(self.miner / "submission-gate.py"),
-               "validate-config", "--config", str(self.miner / "config.json")]
+               "validate-config", "--config", str(self.miner / "config.json"),
+               "--expected-log-file", posix_path(self.miner / "xmrig.log")]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         obj = json.loads((self.miner / "config.json").read_text())
-        obj["randomx"]["mode"] = "light"
+        obj["log-file"] = None
         (self.miner / "config.json").write_text(json.dumps(obj))
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_gate_rejects_empty_readiness_marker(self):
+        ready_file = self.directory / ".full-dataset-ready"
+        ready_file.write_bytes(b"")
+        gate_server, recorded_bodies = self.start_recording_gate(ready_file)
+        status, payload, _ = self.gate_rpc(gate_server, "submitblock")
+
+        self.assertEqual(status, 200)
+        self.assertIn("error", payload, payload)
+        self.assertEqual(payload["error"]["code"], -32099)
+        self.assertEqual(recorded_bodies, [])
+
+    def test_gate_forwards_templates_and_only_exact_ready_submissions(self):
+        ready_file = self.directory / ".full-dataset-ready"
+        gate_server, recorded_bodies = self.start_recording_gate(ready_file)
+
+        status, payload, template_request = self.gate_rpc(gate_server, "getblocktemplate")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["result"]["status"], "OK")
+        self.assertEqual(recorded_bodies, [template_request])
+
+        status, payload, _ = self.gate_rpc(gate_server, "submitblock")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["error"]["code"], -32099)
+        self.assertEqual(recorded_bodies, [template_request])
+
+        ready_file.write_bytes(b"full-dataset-ready")
+        status, payload, _ = self.gate_rpc(gate_server, "submitblock")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["error"]["code"], -32099)
+        self.assertEqual(recorded_bodies, [template_request])
+
+        ready_file.write_bytes(b"full-dataset-ready\n")
+        status, payload, submit_request = self.gate_rpc(gate_server, "submitblock")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["result"]["status"], "OK")
+        self.assertEqual(recorded_bodies, [template_request, submit_request])
 
     def test_hive_shell_callbacks_syntax(self):
         for name in ("h-config.sh", "h-run.sh", "h-stats.sh"):
@@ -207,13 +297,20 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, name + ": " + result.stderr)
 
     def test_gate_only_forwards_known_rpc_methods(self):
-        # Source-level gate check plus endpoint parsing: full daemon acceptance
-        # remains an independent live-network test.
-        import inspect
-        handler_source = inspect.getsource(gate.make_handler)
-        self.assertIn('method not in {"getblocktemplate", "submitblock"}', handler_source)
-        self.assertIn('and not ready_file.is_file()', handler_source)
-        self.assertIn('self._send(403', handler_source)
+        ready_file = self.directory / ".full-dataset-ready"
+        ready_file.write_bytes(b"full-dataset-ready\n")
+        gate_server, recorded_bodies = self.start_recording_gate(ready_file)
+
+        status, payload, _ = self.gate_rpc(gate_server, "get_balance")
+        self.assertEqual(status, 403)
+        self.assertEqual(payload["error"]["code"], -32601)
+
+        status, payload, _ = self.gate_rpc(
+            gate_server, "getblocktemplate", path="/wrong-path"
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(payload["error"]["code"], -32601)
+        self.assertEqual(recorded_bodies, [])
 
 if __name__ == "__main__":
     unittest.main()

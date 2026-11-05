@@ -15,6 +15,7 @@ from urllib.request import urlopen
 
 
 MAX_BODY = 8 * 1024 * 1024
+READY_TOKEN = b"full-dataset-ready\n"
 PRIVATE_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -74,6 +75,13 @@ def _error_body(request_id: object, code: int, message: str) -> bytes:
     ).encode("utf-8")
 
 
+def readiness_marker_valid(ready_file: Path) -> bool:
+    try:
+        return ready_file.is_file() and ready_file.read_bytes() == READY_TOKEN
+    except OSError:
+        return False
+
+
 def make_handler(upstream_host: str, upstream_port: int, ready_file: Path):
     class GateHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -103,7 +111,7 @@ def make_handler(upstream_host: str, upstream_port: int, ready_file: Path):
             if self.path != "/json_rpc" or method not in {"getblocktemplate", "submitblock"}:
                 self._send(403, _error_body(request_id, -32601, "unsupported method"))
                 return
-            if method == "submitblock" and not ready_file.is_file():
+            if method == "submitblock" and not readiness_marker_valid(ready_file):
                 self._send(
                     200,
                     _error_body(
@@ -237,6 +245,7 @@ def validate_config(args: argparse.Namespace) -> int:
             config["randomx"]["mode"] == "fast",
             config["randomx"]["wrmsr"] is False,
             config["randomx"]["rdmsr"] is False,
+            config["log-file"] == args.expected_log_file,
             config["cpu"]["rx/2"] == list(range(32)),
             config["donate-level"] == 0,
             len(config["pools"]) == 1,
@@ -277,6 +286,7 @@ def main() -> int:
 
     validate_parser = subparsers.add_parser("validate-config")
     validate_parser.add_argument("--config", required=True)
+    validate_parser.add_argument("--expected-log-file", required=True)
     validate_parser.set_defaults(function=validate_config)
 
     args = parser.parse_args()
