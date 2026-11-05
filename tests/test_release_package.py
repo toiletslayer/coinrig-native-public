@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -24,7 +25,7 @@ except ImportError:
 
 
 PACKAGER_PATH = BASE / "scripts" / "package_release.py"
-EXPECTED_VERSION = "1.1.0_beta4"
+EXPECTED_VERSION = "1.1.0_beta5"
 EXPECTED_BINARY_SHA = "5b18de5443bf11c6565a433ab470c503c4192f6d17a33d0f8ad62c1852bcd462"
 EXPECTED_FILES = {
     "LICENSE",
@@ -53,7 +54,7 @@ def sha256(path: Path) -> str:
 
 
 class ReleasePackageTests(unittest.TestCase):
-    def test_extracted_beta4_archive_full_offline_lifecycle(self):
+    def test_extracted_beta5_archive_full_offline_24_thread_lifecycle(self):
         prebuilt_value = os.environ.get("COINRIG_PACKAGE_ARCHIVE")
         upstream_value = os.environ.get("COINRIG_UPSTREAM_RELEASE")
         if not prebuilt_value and not upstream_value:
@@ -127,6 +128,7 @@ class ReleasePackageTests(unittest.TestCase):
             fake_miner = installed / "xmrig"
             fake_miner.write_text(
                 "#!/usr/bin/env bash\n"
+                "if [[ -n \"${ARGS_FILE:-}\" ]]; then printf '%s\\n' \"$@\" > \"$ARGS_FILE\"; fi\n"
                 "log_file=''\n"
                 "for arg in \"$@\"; do\n"
                 "  case \"$arg\" in --log-file=*) log_file=\"${arg#*=}\" ;; esac\n"
@@ -162,9 +164,10 @@ class ReleasePackageTests(unittest.TestCase):
                 "CUSTOM_URL": ENDPOINT,
                 "CUSTOM_TEMPLATE": WALLET,
                 "CUSTOM_ALGO": "rx2",
-                "CUSTOM_USER_CONFIG": "threads=32",
+                "CUSTOM_USER_CONFIG": "threads=24",
                 "FULL_DATASET_TIMEOUT": "5",
                 "PYTHON_BIN": python_bin,
+                "ARGS_FILE": posix_path(root / "xmrig-args.txt"),
             }
 
             configured = run_bash(
@@ -177,6 +180,10 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertTrue((installed / "config.json").is_file())
             self.assertEqual((installed / ".gateway").read_text().strip(), ENDPOINT)
             self.assertFalse((custom_root / "config.json").exists())
+            config = json.loads(
+                (installed / "config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(config["cpu"]["rx/2"], list(range(24)))
 
             launched = run_bash(
                 f"bash {posix_path(installed / 'h-run.sh')}",
@@ -188,6 +195,11 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(launched.returncode, 0, launched.stderr + "\n" + log)
             self.assertIn("submitblock gate opened", log)
             self.assertFalse((installed / ".full-dataset-ready").exists())
+            args = (root / "xmrig-args.txt").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(
+                [arg for arg in args if arg.startswith("--threads=")],
+                ["--threads=24"],
+            )
 
             trace = root / "stats-helper-argv.txt"
             fake_python = root / "fake-python"

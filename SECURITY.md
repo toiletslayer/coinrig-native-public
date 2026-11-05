@@ -11,8 +11,9 @@ credentials, seed phrases, or unrestricted daemon RPC to a public network.
   confirms full RandomX dataset allocation. It is not a formal proof of hash
   correctness and cannot guarantee no other implementation defects.
 - Never run this miner in RandomX light mode for COIN.
-- The default reference profile locks mining to 32 CPU threads. Change and
-  test the integration for other CPUs before using it.
+- Extra config is limited to exact `threads=N` syntax for N from 1 to 256.
+  Empty Extra config retains the beta.4 default of 32. No other XMRig option is
+  accepted through this field.
 - The miner's local HTTP statistics API binds to 127.0.0.1 only.
 - No wallet keys or credentials belong in a public repository or bug report.
 

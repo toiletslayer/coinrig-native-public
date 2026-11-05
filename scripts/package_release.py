@@ -4,7 +4,7 @@ import argparse, gzip, hashlib, io, pathlib, tarfile
 
 UPSTREAM_ARCHIVE_SHA="a63d82eefcebd8f5bba32199544435392014a301dbf6c90cb59c4dcfb66604b4"
 UPSTREAM_BINARY_SHA="5b18de5443bf11c6565a433ab470c503c4192f6d17a33d0f8ad62c1852bcd462"
-VERSION="1.1.0_beta4"
+VERSION="1.1.0_beta5"
 FOLDER="coinrig-native"
 DOCS=["h-manifest.conf","h-config.sh","h-run.sh","h-stats.sh",
       "submission-gate.py","README.md","PROVENANCE.md","LICENSE"]
